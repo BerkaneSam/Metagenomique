@@ -190,6 +190,7 @@ def chimera_removal(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
             id_parent2 = get_identity(parent2_align)
             id_perc_matrix.append([id_parent1, id_parent2])
         if not detect_chimera(id_perc_matrix):
+            kmer_dict = get_unique_kmer(kmer_dict, full_seq[i], i, kmer_size)
             yield full_seq[i]
 
 
@@ -237,6 +238,8 @@ def main():
     # Get arguments
     args = get_arguments()
     # Votre programme ici
+    otus = abundance_greedy_clustering(args.amplicon_file, args.minseqlen, args.mincount, args.chunk_size, args.kmer_size)
+    write_OTU(otus, args.output_file)
 
 
 if __name__ == '__main__':
