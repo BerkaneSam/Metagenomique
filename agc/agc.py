@@ -139,6 +139,17 @@ def get_unique_kmer(kmer_dict, sequence, id_seq, kmer_size):
     return kmer_dict
 
 
+def search_mates(kmer_dict, sequence, kmer_size):
+    kmers = cut_kmer(sequence, kmer_size)
+    id_list = []
+    for kmer in kmers:
+        if kmer in kmer_dict:
+            id_list += kmer_dict[kmer]
+    result = Counter(id_list).most_common(2)
+    id_parents = [id[0] for id in result ]
+    return id_parents
+
+
 def chimera_removal(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
     pass
 
