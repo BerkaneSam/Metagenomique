@@ -52,25 +52,24 @@ def get_arguments():
       Returns: An object that contains the arguments
     """
     # Parsing arguments
-    parser = argparse.ArgumentParser(description=__doc__, usage=
-                                     "{0} -h"
-                                     .format(sys.argv[0]))
-    parser.add_argument('-i', '-amplicon_file', dest='amplicon_file', type=isfile, required=True, 
+    parser = argparse.ArgumentParser(description=__doc__, usage="{0} -h".format(sys.argv[0]))
+    parser.add_argument('-i', '-amplicon_file', dest='amplicon_file', type=isfile, required=True,
                         help="Amplicon is a compressed fasta file (.fasta.gz)")
-    parser.add_argument('-s', '-minseqlen', dest='minseqlen', type=int, default = 400,
+    parser.add_argument('-s', '-minseqlen', dest='minseqlen', type=int, default=400,
                         help="Minimum sequence length for dereplication (default 400)")
-    parser.add_argument('-m', '-mincount', dest='mincount', type=int, default = 10,
+    parser.add_argument('-m', '-mincount', dest='mincount', type=int, default=10,
                         help="Minimum count for dereplication  (default 10)")
-    parser.add_argument('-c', '-chunk_size', dest='chunk_size', type=int, default = 100,
+    parser.add_argument('-c', '-chunk_size', dest='chunk_size', type=int, default=100,
                         help="Chunk size for dereplication  (default 100)")
-    parser.add_argument('-k', '-kmer_size', dest='kmer_size', type=int, default = 8,
+    parser.add_argument('-k', '-kmer_size', dest='kmer_size', type=int, default=8,
                         help="kmer size for dereplication  (default 10)")
     parser.add_argument('-o', '-output_file', dest='output_file', type=str,
                         default="OTU.fasta", help="Output file")
     return parser.parse_args()
 
+
 def read_fasta(amplicon_file, minseqlen):
-    with gzip.open(amplicon_file, 'rt')as filin:
+    with gzip.open(amplicon_file, 'rt') as filin:
         seq = ""
         for line in filin:
             if not line.startswith(">"):
@@ -80,7 +79,6 @@ def read_fasta(amplicon_file, minseqlen):
                     yield seq
                 seq = ""
         yield seq
-                
 
 
 def dereplication_fulllength(amplicon_file, minseqlen, mincount):
@@ -93,13 +91,11 @@ def dereplication_fulllength(amplicon_file, minseqlen, mincount):
             yield list(seq)
 
 
-
-
 def get_unique(ids):
     return {}.fromkeys(ids).keys()
 
 
-def common(lst1, lst2): 
+def common(lst1, lst2):
     return list(set(lst1) & set(lst2))
 
 
@@ -109,15 +105,16 @@ def get_chunks(sequence, chunk_size):
     if len_seq < chunk_size * 4:
         raise ValueError("Sequence length ({}) is too short to be splitted in 4"
                          " chunk of size {}".format(len_seq, chunk_size))
-    return [sequence[i:i+chunk_size] 
-              for i in range(0, len_seq, chunk_size) 
-                if i+chunk_size <= len_seq - 1]
+    return [sequence[i:i + chunk_size]
+            for i in range(0, len_seq, chunk_size)
+            if i + chunk_size <= len_seq - 1]
 
 
 def cut_kmer(sequence, kmer_size):
     """Cut sequence into kmers"""
     for i in range(0, len(sequence) - kmer_size + 1):
-        yield sequence[i:i+kmer_size]
+        yield sequence[i:i + kmer_size]
+
 
 def get_identity(alignment_list):
     """Prend en une liste de séquences alignées au format ["SE-QUENCE1", "SE-QUENCE2"]
@@ -145,8 +142,10 @@ def search_mates(kmer_dict, sequence, kmer_size):
     for kmer in kmers:
         if kmer in kmer_dict:
             id_list += kmer_dict[kmer]
+    if len(id_list) < 2:
+        return id_list
     result = Counter(id_list).most_common(2)
-    id_parents = [id[0] for id in result ]
+    id_parents = [ide[0] for ide in result]
     return id_parents
 
 
@@ -165,28 +164,48 @@ def detect_chimera(perc_identity_matrix):
         if par1 == True and par2 == True:
             return True
     return False
-        
-
-
-
 
 
 def chimera_removal(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
-    pass
+    full_seq = list(dereplication_fulllength(amplicon_file, minseqlen, mincount))
+    kmer_dict = get_unique_kmer({}, full_seq[0], 0, kmer_size)
+    kmer_dict = get_unique_kmer(kmer_dict, full_seq[1], 1, kmer_size)
+    yield full_seq[0]
+    yield full_seq[1]
+    for i in range(2, len(full_seq)):
+        potential_parents = []
+        id_perc_matrix = []
+        seq_chunk = get_chunks(full_seq[i], chunk_size)
+        for chunk in seq_chunk:
+            potential_parents.append(sorted(search_mates(kmer_dict, chunk, kmer_size)))
+        for parent in potential_parents:
+            parent1 = get_chunks(full_seq[parent[0]][0], chunk_size)
+            parent2 = get_chunks(full_seq[parent[1]][0], chunk_size)
+        for j in range(chunk_size):
+            parent1_align = nw.global_align(seq_chunk[j], parent1[j], gap_open=-1, gap_extend=-1,
+                                            matrix=os.path.abspath(os.path.join(os.path.dirname(__file__), "MATCH")))
+            id_parent1 = get_identity(parent1_align)
+            parent2_align = nw.global_align(seq_chunk[j], parent2[j], gap_open=-1, gap_extend=-1,
+                                            matrix=os.path.abspath(os.path.join(os.path.dirname(__file__), "MATCH")))
+            id_parent2 = get_identity(parent2_align)
+            id_perc_matrix.append([id_parent1, id_parent2])
+        if not detect_chimera(id_perc_matrix):
+            yield full_seq[i]
+
 
 def abundance_greedy_clustering(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
     otu = []
     mother_intermediate = []
-    seqs = list(dereplication_fulllength(amplicon_file, minseqlen, mincount))
+    seqs = list(chimera_removal(amplicon_file, minseqlen, mincount, chunk_size, kmer_size))
     for i in range(len(seqs)):
         if seqs[i] in mother_intermediate:
-            continue 
+            continue
         intermediate = [seqs[i]]
         for j in range(i + 1, len(seqs)):
-            seq_align = nw.global_align(seqs[i][0], seqs[j][0], gap_open=-1, gap_extend=-1, 
-            matrix=os.path.abspath(os.path.join(os.path.dirname(__file__),"MATCH")))
-            id = get_identity(seq_align)
-            if id > 97:
+            seq_align = nw.global_align(seqs[i][0], seqs[j][0], gap_open=-1, gap_extend=-1,
+                                        matrix=os.path.abspath(os.path.join(os.path.dirname(__file__), "MATCH")))
+            ide = get_identity(seq_align)
+            if ide > 97:
                 intermediate.append(seqs[j])
         otu.append(intermediate[0])
         mother_intermediate += intermediate
@@ -195,11 +214,12 @@ def abundance_greedy_clustering(amplicon_file, minseqlen, mincount, chunk_size, 
 
 def fill(text, width=80):
     """Split text with a line return to respect fasta format"""
-    return os.linesep.join(text[i:i+width] for i in range(0, len(text), width))
+    return os.linesep.join(text[i:i + width] for i in range(0, len(text), width))
+
 
 def write_OTU(OTU_list, output_file):
     count = 1
-    with open(output_file, 'w')as filout:
+    with open(output_file, 'w') as filout:
         for otu in OTU_list:
             filout.write(f">OTU_{count} occurrence:{otu[1]}\n")
             seq = fill(otu[0])
@@ -207,9 +227,9 @@ def write_OTU(OTU_list, output_file):
             count += 1
 
 
-#==============================================================
+# ==============================================================
 # Main program
-#==============================================================
+# ==============================================================
 def main():
     """
     Main program function
