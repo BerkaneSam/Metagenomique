@@ -128,19 +128,52 @@ def get_identity(alignment_list):
             id_nu += 1
     return round(100.0 * id_nu / len(alignment_list[0]), 2)
 
+
+def get_unique_kmer(kmer_dict, sequence, id_seq, kmer_size):
+    kmers = cut_kmer(sequence, kmer_size)
+    for kmer in kmers:
+        if kmer not in kmer_dict:
+            kmer_dict[kmer] = [id_seq]
+        else:
+            kmer_dict[kmer].append(id_seq)
+    return kmer_dict
+
+
 def chimera_removal(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
     pass
 
 def abundance_greedy_clustering(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
-    pass
-    
+    otu = []
+    mother_intermediate = []
+    seqs = list(dereplication_fulllength(amplicon_file, minseqlen, mincount))
+    for i in range(len(seqs)):
+        if seqs[i] in mother_intermediate:
+            continue 
+        intermediate = [seqs[i]]
+        for j in range(i + 1, len(seqs)):
+            seq_align = nw.global_align(seqs[i][0], seqs[j][0], gap_open=-1, gap_extend=-1, 
+            matrix=os.path.abspath(os.path.join(os.path.dirname(__file__),"MATCH")))
+            id = get_identity(seq_align)
+            if id > 97:
+                intermediate.append(seqs[j])
+        otu.append(intermediate[0])
+        mother_intermediate += intermediate
+    return otu
+
 
 def fill(text, width=80):
     """Split text with a line return to respect fasta format"""
     return os.linesep.join(text[i:i+width] for i in range(0, len(text), width))
 
 def write_OTU(OTU_list, output_file):
-    pass
+    count = 1
+    with open(output_file, 'w')as filout:
+        for otu in OTU_list:
+            filout.write(f">OTU_{count} occurrence:{otu[1]}\n")
+            seq = fill(otu[0])
+            filout.write(f"{seq}\n")
+            count += 1
+
 
 #==============================================================
 # Main program
