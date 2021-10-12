@@ -70,11 +70,29 @@ def get_arguments():
     return parser.parse_args()
 
 def read_fasta(amplicon_file, minseqlen):
-    pass
+    with gzip.open(amplicon_file, 'rt')as filin:
+        seq = ""
+        for line in filin:
+            if not line.startswith(">"):
+                seq += line.strip()
+            else:
+                if len(seq) >= minseqlen:
+                    yield seq
+                seq = ""
+        yield seq
+                
 
 
 def dereplication_fulllength(amplicon_file, minseqlen, mincount):
-    pass
+    seq_gen = list(read_fasta(amplicon_file, minseqlen))
+    seq_count = [(seq, seq_gen.count(seq)) for seq in seq_gen]
+    seq_count = list(get_unique(seq_count))
+    seq_count.sort(key=lambda item: item[1], reverse=True)
+    for seq in seq_count:
+        if seq[1] >= mincount:
+            yield list(seq)
+
+
 
 
 def get_unique(ids):
@@ -115,6 +133,7 @@ def chimera_removal(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
 
 def abundance_greedy_clustering(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
     pass
+    
 
 def fill(text, width=80):
     """Split text with a line return to respect fasta format"""
