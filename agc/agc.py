@@ -150,6 +150,27 @@ def search_mates(kmer_dict, sequence, kmer_size):
     return id_parents
 
 
+def detect_chimera(perc_identity_matrix):
+    std_results = []
+    par1 = False
+    par2 = False
+    for seg_id in perc_identity_matrix:
+        std_results.append(statistics.stdev(seg_id))
+        if seg_id[0] > seg_id[1]:
+            par1 = True
+        if seg_id[1] > seg_id[0]:
+            par2 = True
+    std_mean = statistics.mean(std_results)
+    if std_mean > 5:
+        if par1 == True and par2 == True:
+            return True
+    return False
+        
+
+
+
+
+
 def chimera_removal(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
     pass
 
